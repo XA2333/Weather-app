@@ -169,6 +169,3 @@ python -m py_compile app.py
 MIT
 
 ---
-
-If you'd like the README to include more examples (full request/response bodies),
-or a separate API reference file, I can add that next.
