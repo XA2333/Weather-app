@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Weather App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-cloud-sun"></i> Advanced Weather App</h1>
+            <div class="header-info">
+                <p class="developer-name">👨‍💻 Developed by: <strong>Wentao Ma</strong></p>
+                <button onclick="showPMInfo()" class="btn btn-info">
+                    <i class="fas fa-info-circle"></i> About PM Accelerator
+                </button>
+            </div>
+        </header>
+
+        <!-- Current Weather & Forecast Section -->
+        <div class="weather-live-section">
+            <div class="panel current-weather-panel">
+                <h2><i class="fas fa-temperature-high"></i> Current Weather</h2>
+                <form id="current-weather-form">
+                    <div class="inline-form">
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="current-location" placeholder="Enter location" required autocomplete="off">
+                            <div id="current-location-suggestions" class="autocomplete-dropdown"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Get Current Weather
+                        </button>
+                        <button type="button" onclick="getCurrentLocationWeather()" class="btn btn-location">
+                            <i class="fas fa-map-marker-alt"></i> Use My Location
+                        </button>
+                    </div>
+                </form>
+                <div id="current-weather-display"></div>
+            </div>
+
+            <div class="panel forecast-panel">
+                <h2><i class="fas fa-calendar-week"></i> 5-Day Forecast</h2>
+                <div id="forecast-display"></div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- Left Panel: Historical Weather Form -->
+            <div class="panel form-panel">
+                <h2><i class="fas fa-plus-circle"></i> Historical Weather Data</h2>
+                <form id="weather-form">
+                    <div class="form-group">
+                        <label for="location"><i class="fas fa-map-marker-alt"></i> Location</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="location" placeholder="Enter city, zip code, or coordinates" required autocomplete="off">
+                            <div id="location-suggestions" class="autocomplete-dropdown"></div>
+                        </div>
+                        <small>Examples: New York, 10001, 40.7128,-74.0060</small>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="start-date"><i class="fas fa-calendar-alt"></i> Start Date</label>
+                            <input type="date" id="start-date" required max="2025-11-05">
+                        </div>
+                        <div class="form-group">
+                            <label for="end-date"><i class="fas fa-calendar-check"></i> End Date</label>
+                            <input type="date" id="end-date" required max="2025-11-05">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Get Historical Weather
+                    </button>
+                </form>
+                <div id="weather-result" class="result-message"></div>
+            </div>
+
+            <!-- Right Panel: Export Options -->
+            <div class="panel export-panel">
+                <h2><i class="fas fa-download"></i> Export Data</h2>
+                <p>Export all weather records to various formats:</p>
+                <div class="export-buttons">
+                    <button onclick="exportData('json')" class="btn btn-export">
+                        <i class="fas fa-file-code"></i> JSON
+                    </button>
+                    <button onclick="exportData('csv')" class="btn btn-export">
+                        <i class="fas fa-file-csv"></i> CSV
+                    </button>
+                    <button onclick="exportData('markdown')" class="btn btn-export">
+                        <i class="fas fa-file-alt"></i> Markdown
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weather History Section -->
+        <div class="panel history-panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-history"></i> Weather History</h2>
+                <button onclick="fetchHistory()" class="btn btn-refresh">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div id="history-container" class="history-grid"></div>
+            <div id="no-records" class="no-records" style="display: none;">
+                <i class="fas fa-inbox"></i>
+                <p>No weather records yet. Add your first query above!</p>
+            </div>
+        </div>
+
+        <!-- Modal for Update -->
+        <div id="update-modal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <h2><i class="fas fa-edit"></i> Update Weather Record</h2>
+                <form id="update-form">
+                    <input type="hidden" id="update-id">
+                    <div class="form-group">
+                        <label for="update-location"><i class="fas fa-map-marker-alt"></i> Location</label>
+                        <input type="text" id="update-location" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="update-start-date"><i class="fas fa-calendar-alt"></i> Start Date</label>
+                            <input type="date" id="update-start-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="update-end-date"><i class="fas fa-calendar-check"></i>          </label>
+                            <input type="date" id="update-end-date" required>
+                        </div>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                        <button type="button" onclick="closeModal()" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal for Details -->
+        <div id="details-modal" class="modal">
+            <div class="modal-content modal-large">
+                <span class="close" onclick="closeDetailsModal()">&times;</span>
+                <h2 id="details-title"><i class="fas fa-info-circle"></i> Weather Details</h2>
+                <div id="details-content" class="details-grid">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- PM Accelerator Info Modal -->
+        <div id="pm-info-modal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closePMInfo()">&times;</span>
+                <h2><i class="fas fa-info-circle"></i> About PM Accelerator</h2>
+                <div class="pm-info-content">
+                    <p><strong>Product Manager Accelerator</strong> is a premier training and mentorship program designed to help aspiring and current product managers excel in their careers.</p>
+                    
+                    <h3><i class="fas fa-target"></i> Our Mission</h3>
+                    <p>We accelerate the careers of product managers through comprehensive training, real-world projects, and industry connections.</p>
+                    
+                    <h3><i class="fas fa-star"></i> What We Offer</h3>
+                    <ul>
+                        <li>🎯 Comprehensive PM Training Programs</li>
+                        <li>👥 Mentorship from Industry Experts</li>
+                        <li>💼 Real-world Project Experience</li>
+                        <li>🤝 Networking Opportunities</li>
+                        <li>📈 Career Acceleration Resources</li>
+                    </ul>
+                    
+                    <h3><i class="fas fa-link"></i> Connect With Us</h3>
+                    <p>
+                        <a href="https://www.linkedin.com/school/pmaccelerator/" target="_blank" class="linkedin-link">
+                            <i class="fab fa-linkedin"></i> Visit our LinkedIn Page
+                        </a>
+                    </p>
+                    
+                    <p class="pm-description">
+                        Learn more about how we're transforming careers and building the next generation of product management leaders.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p><i class="fas fa-info-circle"></i> Track weather history with CRUD operations, maps, and export features</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
