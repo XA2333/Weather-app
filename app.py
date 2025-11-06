@@ -19,6 +19,34 @@ app = Flask(__name__)
 app.config["MONGO_URI"] = "mongodb://localhost:27017/weather_app"
 mongo = PyMongo(app)
 
+# --- New: safe helper to get a MongoDB collection ---
+def get_collection_safe(name):
+    """
+    Return the specified collection object. If the database is not initialized,
+    return None. Callers should check the return value and respond with a
+    500 error or an appropriate message when None is returned.
+    """
+    # Prefer the initialized `mongo.db` when available
+    db = getattr(mongo, 'db', None)
+    # `pymongo.database.Database` does not support truth-value testing
+    # (bool(db) raises NotImplementedError). Compare explicitly with None.
+    if db is not None:
+        return getattr(db, name, None)
+
+    # Fallback: try to obtain the database from the underlying pymongo client
+    client = getattr(mongo, 'cx', None) or getattr(mongo, 'client', None)
+    # Similarly, avoid truth-value testing on client; check for None instead.
+    if client is not None:
+        # Try to infer the database name from configuration
+        db_name = app.config.get('MONGO_DBNAME') or app.config.get('MONGO_URI', '').rsplit('/', 1)[-1]
+        try:
+            if db_name:
+                return client[db_name][name]
+        except Exception:
+            return None
+
+    return None
+
 # --- Helper Functions ---
 def validate_date(date_str):
     try:
@@ -311,7 +339,10 @@ def create_weather_record():
         'created_at': datetime.datetime.utcnow()
     }
     
-    result = mongo.db.weather_history.insert_one(new_record)
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+    result = coll.insert_one(new_record)
     
     # Convert for response
     response_data = {
@@ -327,7 +358,10 @@ def create_weather_record():
 # READ (All) - MongoDB version
 @app.route('/api/weather/history', methods=['GET'])
 def get_history():
-    records = mongo.db.weather_history.find()
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+    records = coll.find()
     result = []
     for record in records:
         result.append({
@@ -342,8 +376,11 @@ def get_history():
 # UPDATE - MongoDB version
 @app.route('/api/weather/history/<id>', methods=['PUT'])
 def update_record(id):
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
     try:
-        record = mongo.db.weather_history.find_one({'_id': ObjectId(id)})
+        record = coll.find_one({'_id': ObjectId(id)})
         if not record:
             return jsonify({"error": "Record not found"}), 404
     except:
@@ -376,7 +413,7 @@ def update_record(id):
             return jsonify({"error": "Could not retrieve weather data."}), 500
         
         # Update MongoDB document
-        mongo.db.weather_history.update_one(
+        coll.update_one(
             {'_id': ObjectId(id)},
             {'$set': {
                 'location': found_location_name,
@@ -388,7 +425,7 @@ def update_record(id):
         )
     else:
         # Only update location name
-        mongo.db.weather_history.update_one(
+        coll.update_one(
             {'_id': ObjectId(id)},
             {'$set': {
                 'location': new_location,
@@ -397,7 +434,7 @@ def update_record(id):
         )
     
     # Fetch updated record
-    updated_record = mongo.db.weather_history.find_one({'_id': ObjectId(id)})
+    updated_record = coll.find_one({'_id': ObjectId(id)})
     return jsonify({
         'id': str(updated_record['_id']),
         'location': updated_record['location'],
@@ -409,19 +446,61 @@ def update_record(id):
 # DELETE - MongoDB version
 @app.route('/api/weather/history/<id>', methods=['DELETE'])
 def delete_record(id):
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
     try:
-        result = mongo.db.weather_history.delete_one({'_id': ObjectId(id)})
+        result = coll.delete_one({'_id': ObjectId(id)})
         if result.deleted_count == 0:
             return jsonify({"error": "Record not found"}), 404
         return jsonify({"message": "Record deleted successfully"})
     except:
         return jsonify({"error": "Invalid record ID"}), 400, 200
 
+
+@app.route('/api/weather/history', methods=['DELETE'])
+def clear_history():
+    """Clear all weather history records.
+
+    Safety: require explicit confirmation either as query param `?confirm=true`
+    or JSON body `{"confirm": true}`. This prevents accidental deletions.
+    Returns the number of deleted documents.
+    """
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+
+    # Require explicit confirmation to avoid accidental mass-deletes
+    confirm_q = request.args.get('confirm', '').lower() == 'true'
+    confirm_json = False
+    try:
+        body = request.get_json(silent=True) or {}
+        confirm_json = bool(body.get('confirm') is True)
+    except Exception:
+        confirm_json = False
+
+    if not (confirm_q or confirm_json):
+        return jsonify({
+            "error": "Confirmation required to clear history. Provide ?confirm=true or JSON {'confirm': true} in request body."
+        }), 400
+
+    try:
+        result = coll.delete_many({})
+        return jsonify({
+            'message': 'All weather history records deleted',
+            'deleted_count': int(result.deleted_count)
+        }), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete records", "details": str(e)}), 500
+
 # EXPORT - JSON - MongoDB version
 @app.route('/api/export/json', methods=['GET'])
 def export_json():
     """Export all weather records as JSON."""
-    records = mongo.db.weather_history.find()
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+    records = coll.find()
     result = []
     for record in records:
         result.append({
@@ -441,7 +520,10 @@ def export_json():
 @app.route('/api/export/csv', methods=['GET'])
 def export_csv():
     """Export all weather records as CSV."""
-    records = mongo.db.weather_history.find()
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+    records = coll.find()
     
     output = StringIO()
     writer = csv.writer(output)
@@ -472,7 +554,10 @@ def export_csv():
 @app.route('/api/export/markdown', methods=['GET'])
 def export_markdown():
     """Export all weather records as Markdown."""
-    records = mongo.db.weather_history.find()
+    coll = get_collection_safe('weather_history')
+    if coll is None:
+        return jsonify({"error": "Database not initialized"}), 500
+    records = coll.find()
     
     md_content = "# Weather History Data\n\n"
     md_content += f"*Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n"

@@ -436,13 +436,13 @@ function fetchHistory() {
                         <p><strong>Max:</strong> ${maxTemp.toFixed(1)}°C</p>
                     </div>
                     <div class="actions">
-                        <button onclick="showDetails(${record.id})" class="btn btn-details">
+                        <button onclick="showDetails('${record.id}')" class="btn btn-details">
                             <i class="fas fa-eye"></i> Details
                         </button>
-                        <button onclick="openUpdateModal(${record.id})" class="btn btn-edit">
+                        <button onclick="openUpdateModal('${record.id}')" class="btn btn-edit">
                             <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button onclick="deleteRecord(${record.id})" class="btn btn-delete">
+                        <button onclick="deleteRecord('${record.id}')" class="btn btn-delete">
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </div>
